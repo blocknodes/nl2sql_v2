@@ -1,0 +1,57 @@
+# v2 品牌映射：中文 → 物理列 sale_brand_name 的英文值
+brand_map:
+  海信: Hisense
+  容声: Ronshen
+  科龙: KELON
+  冠捷: gorenje
+  维迪亚: Vidda
+  约克: YORK
+  日立: HITACHI
+  东芝: TOSHIBA
+  ASKO: ASKO
+
+# 类目 → mid_class_name LIKE 的模式
+category_like:
+  电视: "%电视%"
+  空调: "%空调%"
+  冰箱: "%冰箱%"
+  冷柜: "%冷柜%"
+  洗衣机: "%洗衣机%"
+  烘干机: "%干衣机%"
+  投影: "%投影%"
+  显示器: "%显示器%"
+
+# 全局隐式 WHERE
+global_filters:
+  - { col: sale_area_name, op: "=", value: "中国" }
+  - { col: sale_model_lca_name, op: "=", value: "上市" }
+
+# 隐式 ORDER BY
+implicit_order: "PG00025 DESC"
+
+# intent → SELECT 映射
+intent_select:
+  list: [sale_model_name, promotion_name]
+  price: [sale_model_name, retail_h]
+  spec: ["*"]
+  field: [sale_model_name]
+
+# 默认/最大 LIMIT
+default_limit: 5
+max_limit: 1000
+
+# force_like：这些物理列在 = 时自动改为 LIKE '%v%'
+force_like_cols:
+  - mid_class_name
+  - sale_model_name
+  - on_sale_date
+  - series_name
+  - product_pnt_name
+  - promotion_name
+  - model_name
+
+# approximately 浮动比例
+approx_ratio: 0.1
+
+# 表名
+table: ads_mipd_aiplat_hiknow_product_insale_info_dd

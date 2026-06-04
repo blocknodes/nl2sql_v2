@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NL2SQL DSL v2",
+  "type": "object",
+  "properties": {
+    "category": { "type": ["string", "null"], "enum": ["电视","空调","冰箱","冷柜","洗衣机","烘干机","投影","显示器", null] },
+    "brand": { "type": ["string", "null"] },
+    "intent": { "type": "string", "enum": ["list", "price", "spec", "field"] },
+    "filters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "field": { "type": "string" },
+          "op": { "type": "string", "enum": ["=", ">", "<", ">=", "<=", "!=", "~"] },
+          "value": { "type": "string" }
+        },
+        "required": ["field", "op", "value"]
+      }
+    },
+    "sort": {
+      "type": ["object", "null"],
+      "properties": {
+        "field": { "type": "string" },
+        "dir": { "type": "string", "enum": ["asc", "desc"] }
+      },
+      "required": ["field", "dir"]
+    },
+    "limit": { "type": ["integer", "null"] },
+    "target_fields": { "type": ["array", "null"], "items": { "type": "string" } }
+  },
+  "required": ["category", "brand", "intent", "filters"],
+  "additionalProperties": false
+}

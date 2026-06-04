@@ -1,0 +1,128 @@
+# Few-shot 案例库（BM25 检索用）
+# 每条: query + dsl ground truth
+
+- query: "海信电视有哪些型号"
+  dsl:
+    category: "电视"
+    brand: "海信"
+    intent: "list"
+    filters: []
+    sort: null
+    limit: null
+
+- query: "维迪亚100英寸以上最贵的电视"
+  dsl:
+    category: "电视"
+    brand: "维迪亚"
+    intent: "list"
+    filters:
+      - {field: screenSizeInch, op: ">=", value: "100"}
+    sort: {field: salesPriceYuan, dir: desc}
+    limit: 1
+
+- query: "科龙1.5匹变频挂机空调"
+  dsl:
+    category: "空调"
+    brand: "科龙"
+    intent: "list"
+    filters:
+      - {field: air_conditioner_horsepower, op: "=", value: "1.5匹"}
+      - {field: frequency_type, op: "=", value: "变频"}
+      - {field: air_conditioner_type, op: "=", value: "挂机"}
+    sort: null
+    limit: null
+
+- query: "容声冷藏室350升以上的冰箱"
+  dsl:
+    category: "冰箱"
+    brand: "容声"
+    intent: "list"
+    filters:
+      - {field: refrigerator_volume_l, op: ">", value: "350"}
+    sort: null
+    limit: null
+
+- query: "海信13公斤带烘干的洗衣机价格从低到高"
+  dsl:
+    category: "洗衣机"
+    brand: "海信"
+    intent: "list"
+    filters:
+      - {field: nominal_washing_capacity_kg, op: "=", value: "13"}
+      - {field: drying_method, op: "!=", value: "NULL"}
+    sort: {field: salesPriceYuan, dir: asc}
+    limit: null
+
+- query: "75L7Q-Pro多少钱"
+  dsl:
+    category: null
+    brand: null
+    intent: "price"
+    filters:
+      - {field: salesModelName, op: "=", value: "75L7Q-Pro"}
+    sort: null
+    limit: null
+
+- query: "85V1F-S参数"
+  dsl:
+    category: null
+    brand: null
+    intent: "spec"
+    filters:
+      - {field: salesModelName, op: "=", value: "85V1F-S"}
+    sort: null
+    limit: null
+
+- query: "海信电视5000元左右的型号"
+  dsl:
+    category: "电视"
+    brand: "海信"
+    intent: "list"
+    filters:
+      - {field: salesPriceYuan, op: "~", value: "5000"}
+    sort: null
+    limit: null
+
+- query: "3000到5000元的高端空调"
+  dsl:
+    category: "空调"
+    brand: null
+    intent: "list"
+    filters:
+      - {field: salesPriceYuan, op: ">", value: "3000"}
+      - {field: salesPriceYuan, op: "<", value: "5000"}
+      - {field: productPositionName, op: "=", value: "高端"}
+    sort: null
+    limit: null
+
+- query: "32英寸160Hz的海信显示器是几级能效"
+  dsl:
+    category: "显示器"
+    brand: "海信"
+    intent: "field"
+    filters:
+      - {field: screenSizeInch, op: "=", value: "32"}
+      - {field: refreshRate, op: "=", value: "160Hz"}
+    sort: null
+    limit: null
+    target_fields: ["energyEfficiencyGrade"]
+
+- query: "海信家用空调的产品型号是多少"
+  dsl:
+    category: "空调"
+    brand: "海信"
+    intent: "list"
+    filters:
+      - {field: productMidCategoryName, op: "=", value: "家用房间空调"}
+    sort: null
+    limit: null
+
+- query: "海信4K投影仪最贵的3款"
+  dsl:
+    category: "投影"
+    brand: "海信"
+    intent: "list"
+    filters:
+      - {field: resolution, op: "=", value: "4K"}
+    sort: {field: salesPriceYuan, dir: desc}
+    limit: 3

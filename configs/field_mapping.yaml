@@ -1,0 +1,100 @@
+# 完整逻辑字段名 → 物理列映射
+
+# ========== 基础字段 ==========
+outerPackLengthMm: product_long
+outerPackWidthMm: product_wide
+outerPackHeightMm: product_high
+product_dimension_length_mm: PC00079
+product_dimension_width_mm: PC00080
+product_dimension_height_mm: PC00081
+grossWeightKg: gross_weight
+netWeightKg: net_weight
+colorName: color_name
+productPositionName: product_pnt_name
+domesticExportSaleName: inout_sale_name
+productFamilyName: family_name
+productSeriesName: series_name
+productModelName: model_name
+salesModelName: sale_model_name
+salesModelLifeCycleStatusName: sale_model_lca_name
+salesAreaCode: sale_area_code
+salesAreaName: sale_area_name
+promotionName: promotion_name
+salesBrandName: sale_brand_name
+productBigCategoryName: big_class_name
+productMidCategoryName: mid_class_name
+productSmallCategoryName: small_class_name
+salesPriceYuan: retail_h
+actualSalesDate: on_sale_date
+
+# ========== 电视 ==========
+screenSizeInch: PC00003
+resolution: PC00005
+resolutionHorizontalPixels: PC00005_CL
+refreshRate: PC00007
+refreshRateHz: PC00007_CL
+ramCapacity: PC00009
+ramCapacityMb: PC00009_CL
+romCapacity: PC00010
+romCapacityMb: PC00010_CL
+energyEfficiencyGrade: PC00024
+productWidthWithoutBaseMm: PC00042
+productHeightWithoutBaseMm: PC00043
+productThicknessWithoutBaseMm: PC00044
+productWidthWithBaseMm: PC00045
+productHeightWithBaseMm: PC00046
+productThicknessWithBaseMm: PC00047
+
+# ========== 空调 ==========
+frequency_type: PC10003
+product_dimension_depth_mm: PC10008
+main_body_color: PC20083
+indoor_unit_model: PC20029
+outdoor_unit_model: PC20055
+noise_dba: PC10093
+air_conditioner_type: product_spec
+air_conditioner_horsepower: spec_range
+
+# ========== 显示器 ==========
+software_system: PC00011
+product_dimension_width_no_base_mm: PC00042
+product_dimension_height_no_base_mm: PC00043
+product_dimension_width_with_base_mm: PC00045
+product_dimension_height_with_base_mm: PC00046
+product_dimension_height2_with_base_mm: PC00048
+product_weight_no_base_kg: PC00049
+product_dimension_length_no_base_mm: PC00095
+product_dimension_length_with_base_mm: PC00179
+
+# ========== 冰箱 ==========
+refrigerator_volume_l: PC10047
+freezer_volume_l: PC10048
+comprehensive_power_consumption_kwh_per_24h: PC10106
+
+# ========== 冷柜 ==========
+door_color: PC10054
+cabinet_color: PC10086
+total_volume_l: PC10107
+temperature_zone: PC10120
+
+# ========== 洗衣机 ==========
+key_press_method: PC10001
+nominal_drying_capacity_kg: PC10004
+nominal_dehydration_capacity_kg: PC10005
+nominal_washing_capacity_kg: PC10006
+motor_type: PC10022
+rated_voltage_v: PC10025
+rated_frequency_hz: PC10027
+drying_method: PC10036
+drainage_method: PC10060
+appearance_color: PC10074
+washing_ratio: PC10078
+display_type: PC10081
+refrigerant_type: PC10097
+intelligent_dispensing: PC10101
+max_dehydration_speed_rpm: PC10109
+motor_fixed_or_inverter: PC10113
+
+# ========== 烘干机（复用洗衣机部分列）==========
+# nominal_drying_capacity_kg / motor_type / rated_voltage_v / rated_frequency_hz
+# drying_method / appearance_color / noise_dba / product_dimension_* 已在上方定义
