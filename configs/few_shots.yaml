@@ -126,3 +126,25 @@
       - {field: resolution, op: "=", value: "4K"}
     sort: {field: salesPriceYuan, dir: desc}
     limit: 3
+
+- query: "U7S电视分辨率"
+  dsl:
+    category: "电视"
+    brand: null
+    intent: "field"
+    filters:
+      - {field: promotionName, op: "=", value: "__MODEL__"}
+    sort: null
+    limit: null
+    target_fields: ["resolution"]
+
+- query: "电视毛重"
+  dsl:
+    category: "电视"
+    brand: null
+    intent: "field"
+    filters: []
+    sort: null
+    limit: null
+    target_fields: ["grossWeightKg"]
+

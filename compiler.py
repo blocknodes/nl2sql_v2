@@ -35,6 +35,12 @@ class CompilerV2:
     # ---------- public ----------
 
     def compile(self, dsl: Dict) -> str:
+        # intent=field 时校验 target_fields 是否为有效字段
+        if dsl.get("intent") == "field":
+            for tf in dsl.get("target_fields") or []:
+                if tf not in self.field_map:
+                    raise ValueError(f"无效的target字段: {tf}")
+
         select_cols = self._build_select(dsl)
         where_parts = self._build_where(dsl)
         order_parts = self._build_order(dsl)

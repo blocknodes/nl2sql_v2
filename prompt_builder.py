@@ -5,9 +5,98 @@ Prompt Builder v2 + BM25 Few-Shot Retriever
 import json
 import re
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import yaml
+
+
+# ============== 型号提取与占位符 ==============
+
+# 匹配常见型号模式
+# 长型号：85U7S Pro+, KFR-35GW/KW1X-X1, BCD-650W80FZBAK
+# 短系列：U7S, E8K, A7N（字母+数字+字母 or 字母+数字）
+_MODEL_PATTERNS = [
+    # 长型号：含连字符/斜杠/加号，或数字字母混合>=5字符
+    re.compile(r'[A-Za-z0-9][A-Za-z0-9\-\+\.\/\#]{4,}(?:\s*(?:Pro\+?|Plus|Max|Ultra|Lite))?'),
+    # 带数字前缀的型号：如 85U7S Pro+
+    re.compile(r'\d{2,3}[A-Za-z][A-Za-z0-9\-\+\.\/]*(?:\s*(?:Pro\+?|Plus|Max|Ultra|Lite))?'),
+    # 短系列代号：字母+数字+可选字母，如 U7S, E8K, A7N, E52Q
+    re.compile(r'[A-Za-z]\d+[A-Za-z]*'),
+]
+
+# 品牌词不应被当作型号
+_BRAND_WORDS = {"海信", "容声", "科龙", "维迪亚", "约克", "日立", "东芝", "ASKO", "TV", "Pro"}
+
+# 参数值模式（不应被当作型号）：如 4GB, 64GB, 128MB, 4K, 8K, 120Hz, 1.5匹
+_PARAM_VALUE_RE = re.compile(r'^\d+(\.\d+)?\s*(GB|MB|TB|KB|K|Hz|hz|匹|英寸|寸|W|kWh|rpm|dB|dBA|L|kg|mm|cm)(\+\d+(\.\d+)?\s*(GB|MB|TB|KB))?$', re.IGNORECASE)
+
+MODEL_PLACEHOLDER = "__MODEL__"
+
+
+def extract_model(query: str) -> Tuple[str, Optional[str]]:
+    """
+    从 query 中提取型号，返回 (替换后的query, 原始型号)。
+    如果没有匹配到型号，返回原 query 和 None。
+    优先取最长匹配。
+    """
+    candidates = []
+    for pat in _MODEL_PATTERNS:
+        for m in pat.finditer(query):
+            token = m.group().strip()
+            if token in _BRAND_WORDS or token.isdigit():
+                continue
+            # 过滤纯中文
+            if not re.search(r'[A-Za-z0-9]', token):
+                continue
+            # 过滤参数值（如 4GB+64GB, 120Hz, 8K）
+            if _PARAM_VALUE_RE.match(token):
+                continue
+            candidates.append((len(token), m.start(), token))
+
+    if not candidates:
+        return query, None
+
+    # 取最长匹配，长度相同取最早出现的
+    candidates.sort(key=lambda x: (-x[0], x[1]))
+    model = candidates[0][2]
+    replaced = query.replace(model, MODEL_PLACEHOLDER, 1)
+    return replaced, model
+
+
+def restore_model_in_dsl(dsl: Dict, model_value: Optional[str]) -> Dict:
+    """将 DSL 中的 __MODEL__ 占位符还原为真实型号值，并确定正确的字段名。
+    兜底：如果模型没有输出占位符但用了型号相关字段，也进行修正。
+    """
+    if model_value is None:
+        return dsl
+
+    _model_fields = {"productSeriesName", "promotionName", "salesModelName", "productModelName"}
+    correct_field = _classify_model_field(model_value)
+    found = False
+
+    for f in dsl.get("filters") or []:
+        if f.get("value") == MODEL_PLACEHOLDER or f.get("field") in _model_fields:
+            f["value"] = model_value
+            f["field"] = correct_field
+            found = True
+            break
+
+    # 如果模型完全没输出型号相关 filter，补一个
+    if not found:
+        if dsl.get("filters") is None:
+            dsl["filters"] = []
+        dsl["filters"].append({"field": correct_field, "op": "=", "value": model_value})
+
+    return dsl
+
+
+def _classify_model_field(model_value: str) -> str:
+    """根据型号格式判断应该用哪个字段。默认用 salesModelName。"""
+    # 含中文 → promotionName（如"容声288S1""大薄荷E52Q"）
+    if re.search(r'[\u4e00-\u9fff]', model_value):
+        return "promotionName"
+    # 默认用 salesModelName
+    return "salesModelName"
 
 
 # ============== BM25 简易实现（无外部依赖） ==============
@@ -206,7 +295,7 @@ class PromptBuilderV2:
         self.retriever = retriever or FewShotRetriever()
 
     def build(self, query: str, category: Optional[str] = None) -> str:
-        # 动态召回 few-shot
+        # 动态召回 few-shot（用原始 query 召回）
         examples = self.retriever.retrieve(query, top_k=3)
         examples_str = self._format_examples(examples)
 
@@ -250,6 +339,9 @@ class PromptBuilderV2:
 5. "最贵/最便宜/最大"→ sort + limit:1
 6. 刷新率数值比较(如>=120)用 refreshRateHz；等值(如=160Hz)用 refreshRate
 7. 如果用户问的信息在上述字段字典中找不到(如订单、发货、支付、维修费、安装、生产批次等)，仍然尽力提取能识别的条件(品牌、类目、型号等)，target_fields留空
+8. 用户只提到属性名而没有给具体数值时(如"电视毛重""空调噪音")，该属性放入target_fields，不要作为filter；只有给了具体值(如"毛重大于20kg")才放入filters
+9. 如果输入中包含{MODEL_PLACEHOLDER}占位符，表示一个产品型号/系列名，直接在filter中使用field:"promotionName" op:"=" value:"{MODEL_PLACEHOLDER}"
+10. "尺寸"指产品外观尺寸(宽高厚mm)，用target_fields查productWidthWithoutBaseMm/productHeightWithoutBaseMm/productThicknessWithoutBaseMm；"屏幕尺寸/多少寸"才用screenSizeInch
 
 # 示例
 {examples_str}
@@ -259,6 +351,8 @@ class PromptBuilderV2:
     def _format_examples(self, examples: List[Dict]) -> str:
         lines = []
         for ex in examples:
+            # 示例中的 query 也做型号占位替换，保持一致
+            ex_query, _ = extract_model(ex["query"])
             dsl_str = json.dumps(ex["dsl"], ensure_ascii=False)
-            lines.append(f'输入：{ex["query"]}\n输出：{dsl_str}')
+            lines.append(f'输入：{ex_query}\n输出：{dsl_str}')
         return "\n".join(lines)

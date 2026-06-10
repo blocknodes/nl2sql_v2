@@ -1,0 +1,18 @@
+# Rerank 评分 few-shot 案例
+# 每条包含 query、struct_desc、score(0-10)
+
+- query: "100A6S尺寸"
+  struct_desc: "销售型号名称是100A6S，查询产品尺寸(宽,mm)"
+  score: 9
+
+- query: "海信电视有哪些型号"
+  struct_desc: "品牌是海信，类目是电视，查询型号列表"
+  score: 10
+
+- query: "最便宜的空调多少钱"
+  struct_desc: "类目是空调，查询价格，按销售价格(元)从低到高排序，返回1条"
+  score: 10
+
+- query: "今天天气怎么样"
+  struct_desc: "查询型号列表"
+  score: 0

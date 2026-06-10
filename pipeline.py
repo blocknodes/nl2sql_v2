@@ -5,6 +5,7 @@ NL2SQL v2 Pipeline (standalone)
 
 import json
 import os
+import re
 import time
 import uuid
 from collections import deque
@@ -63,6 +64,69 @@ def _load_domain_blacklist(config_dir: str) -> List[str]:
     return []
 
 
+def _load_domain_whitelist(config_dir: str) -> set:
+    """加载领域白名单词库，合并所有类别的词。"""
+    path = Path(config_dir) / "domain_whitelist.yaml"
+    if not path.exists():
+        return set()
+    data = yaml.safe_load(open(path, encoding="utf-8")) or {}
+    words = set()
+    for key in ("categories", "brands", "attributes", "intent_words", "stop_words"):
+        for w in data.get(key, []):
+            words.add(str(w).lower())
+    return words
+
+
+def _tokenize_query(query: str) -> List[str]:
+    """简易分词：中文用正向最大匹配（基于白名单词库），英文数字按连续段切。"""
+    tokens = []
+    # 先把英文数字段和中文段分开
+    segments = re.findall(r'[\u4e00-\u9fff]+|[A-Za-z][A-Za-z0-9+\-\.]*|[0-9]+\.?[0-9]*', query)
+    for seg in segments:
+        if re.match(r'^[\u4e00-\u9fff]+$', seg):
+            # 中文段按单字切（白名单匹配由 _check_domain_whitelist 用子串方式）
+            for ch in seg:
+                tokens.append(ch)
+        else:
+            tokens.append(seg.lower())
+    return tokens
+
+
+def _check_domain_whitelist(query: str, whitelist: set, extracted_model: str = None) -> bool:
+    """白名单领域判断：query 中去掉型号和数字后，剩余中文内容必须能被白名单词覆盖。"""
+    # 去掉型号
+    check_query = query
+    if extracted_model:
+        check_query = check_query.replace(extracted_model, "")
+
+    # 提取中文部分
+    cn_text = "".join(re.findall(r'[\u4e00-\u9fff]+', check_query))
+    if not cn_text:
+        return True  # 纯英文数字（型号查询），放行
+
+    # 正向最大匹配：尝试用白名单词覆盖中文文本
+    i = 0
+    uncovered = []
+    while i < len(cn_text):
+        matched = False
+        # 从长到短尝试匹配
+        for l in range(min(6, len(cn_text) - i), 0, -1):
+            word = cn_text[i:i+l]
+            if word.lower() in whitelist:
+                i += l
+                matched = True
+                break
+        if not matched:
+            uncovered.append(cn_text[i])
+            i += 1
+
+    # 未覆盖字符占比超过阈值则域外
+    if not cn_text:
+        return True
+    uncovered_ratio = len(uncovered) / len(cn_text)
+    return uncovered_ratio <= 0.3  # 允许 30% 未覆盖（容忍一些生僻表达）
+
+
 class PipelineV2:
     """全链路 v2 Pipeline"""
 
@@ -86,6 +150,7 @@ class PipelineV2:
         self._model_name = os.getenv("MODEL_NAME", "qwen4b")
         self._enable_domain_check = os.getenv("ENABLE_DOMAIN_CHECK", "1").lower() in ("1", "true")
         self._domain_blacklist = _load_domain_blacklist(config_dir)
+        self._domain_whitelist = _load_domain_whitelist(config_dir)
 
         # Trace buffer
         self._traces: deque = deque(maxlen=10000)
@@ -124,61 +189,14 @@ class PipelineV2:
                         "trace_id": trace_id, "category_hint": None, "out_of_domain": True,
                     }
 
-        # 类目检测 + prompt 构建
+        # 类目检测 + 型号提取 + prompt 构建
         category_hint = self._detect_category(query)
-        prompt = self.prompt_builder.build(query, category_hint)
+        from prompt_builder import extract_model, restore_model_in_dsl
+        query_for_prompt, extracted_model = extract_model(query)
 
-        # 并发调用：domain check + NL2SQL 同时发出
-        from concurrent.futures import ThreadPoolExecutor, Future
-
-        llm_client = LLMClient(self._model_server, self._model_name)
-        domain_future: Optional[Future] = None
-
+        # 白名单领域判断（型号提取后执行，避免型号被误判为域外词）
         if self._enable_domain_check:
-            pool = ThreadPoolExecutor(max_workers=2)
-            domain_future = pool.submit(
-                llm_client.generate, _DOMAIN_CHECK_PROMPT.format(query=query)
-            )
-            nl2sql_future = pool.submit(llm_client.generate, prompt)
-            pool.shutdown(wait=False)
-        else:
-            nl2sql_future = None
-
-        # LLM 调用 + 重试
-        dsl = None
-        llm_raw = ""
-        error = ""
-        llm_time_ms = 0.0
-
-        try:
-            for attempt in range(self.MAX_RETRY + 1):
-                lt0 = time.time()
-                if attempt == 0 and nl2sql_future is not None:
-                    llm_raw = nl2sql_future.result(timeout=60)
-                else:
-                    llm_raw = llm_client.generate(prompt)
-                llm_time_ms = (time.time() - lt0) * 1000
-                try:
-                    dsl = self.validator.parse_and_validate(llm_raw, query)
-                    break
-                except ValueError as e:
-                    error = str(e)
-                    if attempt < self.MAX_RETRY:
-                        prompt += f"\n\n上次输出有误：{e}。请重新输出纯JSON。"
-                        error = ""
-        except Exception as e:
-            error = f"LLM调用失败: {e}"
-        finally:
-            llm_client.close()
-
-        # 检查 domain check 结果（与 NL2SQL 并发完成）
-        if domain_future is not None:
-            try:
-                domain_raw = domain_future.result(timeout=60)
-                in_domain = "是" in domain_raw and "否" not in domain_raw
-            except Exception:
-                in_domain = True
-            if not in_domain:
+            if not _check_domain_whitelist(query, self._domain_whitelist, extracted_model):
                 total_ms = (time.time() - t0) * 1000
                 trace_id = str(uuid.uuid4())
                 self._traces.append({
@@ -192,6 +210,36 @@ class PipelineV2:
                     "error": "query不属于家电产品查询领域",
                     "trace_id": trace_id, "category_hint": None, "out_of_domain": True,
                 }
+
+        prompt = self.prompt_builder.build(query_for_prompt, category_hint)
+
+        # LLM 调用
+        llm_client = LLMClient(self._model_server, self._model_name)
+
+        # LLM 调用 + 重试
+        dsl = None
+        llm_raw = ""
+        error = ""
+        llm_time_ms = 0.0
+
+        try:
+            for attempt in range(self.MAX_RETRY + 1):
+                lt0 = time.time()
+                llm_raw = llm_client.generate(prompt)
+                llm_time_ms = (time.time() - lt0) * 1000
+                try:
+                    dsl = self.validator.parse_and_validate(llm_raw, query)
+                    dsl = restore_model_in_dsl(dsl, extracted_model)
+                    break
+                except ValueError as e:
+                    error = str(e)
+                    if attempt < self.MAX_RETRY:
+                        prompt += f"\n\n上次输出有误：{e}。请重新输出纯JSON。"
+                        error = ""
+        except Exception as e:
+            error = f"LLM调用失败: {e}"
+        finally:
+            llm_client.close()
 
         if error or dsl is None:
             total_ms = (time.time() - t0) * 1000
@@ -210,7 +258,22 @@ class PipelineV2:
             }
 
         # 编译
-        sql = self.compiler.compile(dsl)
+        try:
+            sql = self.compiler.compile(dsl)
+        except ValueError as e:
+            total_ms = (time.time() - t0) * 1000
+            trace_id = str(uuid.uuid4())
+            self._traces.append({
+                "trace_id": trace_id, "query": query, "category_hint": category_hint,
+                "dsl": dsl, "sql": "", "error": str(e),
+                "total_time_ms": round(total_ms, 1),
+                "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
+            })
+            return {
+                "sql": "", "dsl": dsl, "llm_raw": llm_raw, "llm_prompt": prompt,
+                "llm_time_ms": llm_time_ms, "total_time_ms": total_ms,
+                "error": str(e), "trace_id": trace_id, "category_hint": category_hint,
+            }
 
         total_ms = (time.time() - t0) * 1000
         result = {

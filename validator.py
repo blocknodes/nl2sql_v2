@@ -63,7 +63,10 @@ class ValidatorV2:
         # 6. target_fields
         tfs = dsl.get("target_fields")
         if tfs and isinstance(tfs, list):
-            dsl["target_fields"] = [f for f in tfs if f in self.valid_fields]
+            dsl["target_fields"] = tfs  # 保留原样，由编译器判断是否有效
+            # 有 target_fields 时 intent 应为 field
+            if dsl.get("intent") != "field":
+                dsl["intent"] = "field"
         else:
             dsl["target_fields"] = None
 
